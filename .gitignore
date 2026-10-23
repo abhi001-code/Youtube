@@ -1,0 +1,25 @@
+# 1. Environment variables and secret keys
+.env
+.env.*
+
+# Allow an example file containing placeholder values
+!.env.example
+
+# 2. Python virtual environment
+.venv/
+venv/
+env/
+
+# 3. Python cache files
+__pycache__/
+*.py[cod]
+
+# 4. VS Code workspace settings
+.vscode/
+
+# 5. Local Chroma database, if created
+chroma_db/
+
+# 6. Operating system files
+.DS_Store
+Thumbs.db
