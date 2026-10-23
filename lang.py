@@ -20,51 +20,23 @@ load_dotenv()
 google_api_key = os.getenv("GOOGLE_API_KEY")
 youtube_api_key = os.getenv("GETYOUTUBETRANSCRIPT_API_KEY")
 
+model = ChatGoogleGenerativeAI(
+    google_api_key=google_api_key,
+    model="gemini-3.6-flash"
+)
 
-def con(retrieved_doc):
-    context_text = "\n\n".join(
-        doc.page_content for doc in retrieved_doc
-    )
-    return context_text
-
-
-def answer_question(video_url, question):
-
-    model = ChatGoogleGenerativeAI(
-        google_api_key=google_api_key,
-        model="gemini-3.6-flash"
-    )
-
-    embeddings = GoogleGenerativeAIEmbeddings(
+embeddings=GoogleGenerativeAIEmbeddings(
         google_api_key=google_api_key,
         model="gemini-embedding-001"
-    )
+)
 
-    loader = GetYouTubeTranscriptLoader(
-        [video_url],
-        language="en",
-        api_key=youtube_api_key
-    )
-
-    docs = loader.load()
-    transcript = docs[0].page_content
-
-    splitter = RecursiveCharacterTextSplitter(
+splitter=RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
-    )
+)
 
-    chunks = splitter.create_documents([transcript])
-
-    vector_store = Chroma.from_documents(chunks, embeddings)
-
-    retriever = vector_store.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 2}
-    )
-
-    prompt = PromptTemplate(
-        template="""
+prompt = PromptTemplate(
+    template="""
 You are a helpful assistant.
 Answer only from the provided transcript context.
 If the context is insufficient, just say "I don't know".
@@ -74,8 +46,43 @@ Context:
 
 Question: {question}
 """,
-        input_variables=["context", "question"]
+    input_variables=["context", "question"]
+)
+
+parser = StrOutputParser()
+
+
+def con(retrieved_doc):
+    context_text = "\n\n".join(
+        doc.page_content for doc in retrieved_doc
     )
+    return context_text
+
+def process_video(video_url):
+    loader=GetYouTubeTranscriptLoader(
+        [video_url],
+        language='en',
+        api_key=youtube_api_key
+    )
+
+    docs=loader.load()
+    if not docs or not docs[0].page_content.strip():
+        raise ValueError("No transcript found for the provided video URL.")
+    transcript=docs[0].page_content
+
+    chunks=splitter.create_documents([transcript])
+
+    vector_store=Chroma.from_documents(chunks , embeddings)
+
+    retriever=vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 2}
+    )
+
+    return retriever
+
+def answer_question(retriever, question):
+
 
     parallel_chain = RunnableParallel({
         "context": (
@@ -85,8 +92,6 @@ Question: {question}
         ),
         "question": RunnableLambda(lambda x: x["question"])
     })
-
-    parser = StrOutputParser()
 
     main_chain = parallel_chain | prompt | model | parser
 
